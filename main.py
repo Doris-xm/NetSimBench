@@ -35,8 +35,8 @@ def perfTest(lossy=True):
 
     # info("Testing bandwidth between h1 and h4 (lossy=%s)\n" % lossy)
     h1, h2, h3, h4 = net.get('h1', 'h2', 'h3', 'h4')
-    net.iperf((h1, h4), l4Type='UDP')
-    net.iperf((h1, h2))
+    # net.iperf((h1, h4), l4Type='UDP')
+    # net.iperf((h1, h2))
     # # Debugging
     # h1.cmd('jobs')
     # h4.cmd('jobs')
