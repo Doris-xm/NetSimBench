@@ -1,53 +1,116 @@
 import os
+from mininet.node import Node
 
+""" Config File for FRRouting """
 
-def generateFRRConfig(router_name, router_id, neighbors):
-    "Generate FRRouting configuration"
+def generateFRRConfig(name, asnum, router_id, neighbors, network):
     config = f"""
-frr defaults traditional
-hostname {router_name}
-log file /var/log/frr/{router_name}.log
-service integrated-vtysh-config
+frr defaults datacenter
 !
-router bgp {router_id}
- bgp router-id {router_id}.{router_id}.{router_id}.{router_id}
+hostname {name}
+password zebra
+!
+router bgp {asnum}
+ bgp router-id  {router_id}
+ bgp bestpath as-path multipath-relax
+ no bgp network import-check
 """
     for neighbor in neighbors:
-        config += f" neighbor {neighbor['ip']} remote-as {neighbor['as']}\n"
+        config += f" neighbor {neighbor['ip']} remote-as external\n"
 
-    config += """
+    config += f"""
+ address-family ipv4 unicast
+  network {router_id}/32
+  network {network}
+ exit-address-family
 !
 line vty
+!
+end
 """
     return config
 
-def startFRR(net):
-    "Start FRRouting on all routers"
-    for router in net.hosts:
-        if 'spine' in router.name or 'leaf' in router.name:
-            router.cmd('/usr/lib/frr/frrinit.sh start')
+
+vtysh_conf = '''
+service integrated-vtysh-config
+'''
+
+daemons = '''
+bgpd=yes
+
+vtysh_enable=yes
+zebra_options="  -A 127.0.0.1 -s 90000000"
+bgpd_options="   -A 127.0.0.1"
+'''
+
+
+def put_file(host, file_name, content, **kwargs):
+    os.makedirs(host.name, exist_ok=True)
+    file_dir = "./{}/{}".format(host.name, file_name.split("/")[-1])
+    with open(file_dir, mode="w") as f:
+        f.write(content.format(**kwargs))
+    host.cmdPrint("cp {} {}".format(file_dir, file_name))
 
 def configureFRR(net, n_leaf=2, n_spine=2, m_hosts=2):
     """Configure FRRouting on all routers."""
-    os.makedirs('frr_configs', exist_ok=True)
-    for link in net.links:
-        print(link.intf1.node.name, link.intf2.node.name)
-        for router in link.intf1.node, link.intf2.node:
-            if 'spine' in router.name or 'leaf' in router.name:
-                router_name = router.name
-                router_id = int(router_name[-1])
-                neighbors = []
-                if 'spine' in router_name:
-                    # Spine routers connect to leaf routers
-                    for leaf_id in range(1, n_leaf + 1):
-                        neighbors.append({'ip': f'10.0.{leaf_id}.1', 'as': 200 + leaf_id})
-                elif 'leaf' in router_name:
-                    # Leaf routers connect to spine routers
-                    for spine_id in range(1, n_spine + 1):
-                        neighbors.append({'ip': f'10.0.{router_id}.{spine_id}', 'as': 100 + spine_id})
+    all_spine = [{'ip': router.IP(), 'as': router.params['asnum']} for router in net.hosts if 'spine' in router.name]
+    all_leaf = [{'ip': router.IP(), 'as': router.params['asnum']} for router in net.hosts if 'leaf' in router.name]
+    all_hosts = [{'ip': router.IP(), 'as': 0} for router in net.hosts if 'h' in router.name]
+    for router in net.hosts:
+        # if 'spine' in self.name:
+        #     network = '192.168.1.{}/32'.format(self.name[-1])
+        # else:
+        #     network = '192.168.1.{}/32'.format(self.name[-1] + 32)
+        # put_file(self, "/etc/frr/daemons", daemons)
+        # put_file(self, "/etc/frr/vtysh.conf", vtysh_conf)
+        # frr_conf = generateFRRConfig(self.name, self.params['asnum'], self.IP(), neighbors=[{'ip': '
+        # put_file(self, "/etc/frr/frr.conf", frr_conf, name=self.name,
+        #          router_id=self.IP(), asnum=self.params['asnum'],
+        #          network=network)
+        #
+        # self.cmd("/usr/lib/frr/frrinit.sh start")
+        # self.cmd('ip address add {} dev {}-eth0'.format(network, self.name))
+        if 'spine' in router.name or 'leaf' in router.name:
+            # Get Neighbors
+            neighbors = []
+            if 'spine' in router.name:
+                # Spine routers connect to leaf routers
+                neighbors = all_leaf
+            elif 'leaf' in router.name:
+                # Leaf routers connect to spine routers
+                neighbors = all_spine
+                neighbors.extend(all_hosts)
 
-                config = generateFRRConfig(router_name, 100 + router_id, neighbors)
-                config_path = f'./frr_configs/{router_name}.conf'
-                with open(config_path, 'w') as f:
-                    f.write(config)
-                router.cmd(f'vtysh -f {config_path}')
+            if 'spine' in router.name:
+                network = '192.168.1.{}/32'.format(router.name[-1])
+            else:
+                network = '192.168.1.{}/32'.format(int(router.name[-1]) + 32)
+
+            put_file(router, "/etc/frr/daemons", daemons)
+            put_file(router, "/etc/frr/vtysh.conf", vtysh_conf)
+
+            config = generateFRRConfig(router.name, router.params['asnum'], router.IP(), neighbors=neighbors, network=network)
+            put_file(router, "/etc/frr/frr.conf", config)
+
+            router.cmd("/usr/lib/frr/frrinit.sh start")
+            router.cmd('ip address add {} dev {}-eth0'.format(network, router.name))
+
+
+class LinuxRouter(Node):
+    "A Node with IP forwarding enabled."
+    def config( self, **params ):
+        super( LinuxRouter, self).config( **params )
+
+        # Enable forwarding on the router
+        self.cmd( 'sysctl net.ipv4.ip_forward=1' )
+        # Enable loose reverse path filtering
+        self.cmd( 'sysctl net.ipv4.conf.all.rp_filter=2' )
+
+
+    def terminate( self ):
+        r = self.name
+        self.cmd( 'sysctl net.ipv4.ip_forward=0' )
+        self.cmd( 'sysctl net.ipv4.conf.all.rp_filter=0' )
+
+        self.cmd( "killall bgpd staticd zebra" )
+        super( LinuxRouter, self ).terminate()

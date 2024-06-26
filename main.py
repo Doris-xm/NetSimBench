@@ -10,7 +10,7 @@ from mininet.link import TCLink
 from mininet.util import dumpNodeConnections
 from mininet.log import setLogLevel, info
 
-from frrouting import startFRR, configureFRR
+from frrouting import configureFRR
 from topo import SpineLeafTopo
 
 n_spine = 2
@@ -26,8 +26,11 @@ def perfTest(lossy=True):
     net.start()
     info("Dumping host connections\n")
     dumpNodeConnections(net.hosts)
+    for node in net.hosts:
+        print(f"Node: {node.name}")
+        for intf in node.intfList():
+            print(f"  Interface: {intf.name}, IP: {intf.IP()}")
 
-    startFRR(net)
     configureFRR(net)
 
     # info("Testing network connectivity\n")
@@ -47,11 +50,11 @@ def perfTest(lossy=True):
 
 
 if __name__ == '__main__':
-    try:
+    # try:
         setLogLevel('info')
         # Debug for now
         perfTest(lossy=False)
-    except Exception as e:
-        print(e)
-        # exec " sudo mn -c " to clean up mininet
-        os.system("sudo mn -c")
+    # except Exception as e:
+    #     print(e)
+    #     # exec " sudo mn -c " to clean up mininet
+    #     os.system("sudo mn -c")
