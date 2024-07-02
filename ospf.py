@@ -5,65 +5,42 @@ from mininet.node import Node
 from mininet.cli import CLI
 import time
 import os
+# iperf
+# 简历ospf时间
 
 hostname = os.uname().nodename
 prefix_dir = f"/home/{hostname}/mininet-test/DataCenterTopo/"
-target_dir = "/etc/frr/"
-lib_dir = "/usr/lib/frr/"
+# target_dir = "/etc/frr/"
+# lib_dir = "/usr/lib/frr/"
 
-# target_dir = "/usr/local/etc/"
-# lib_dir = ""
+target_dir = "/usr/local/etc/"
+lib_dir = ""
 
 def generate_zebra_conf(i, j):
     return f"""
-hostname node_{i:x}{j:x}
+hostname node{i:x}{j:x}
 password en
 enable password en
 
-
-log file /tmp/zebra-{i:x}{j:x}.log
 
 """
 
 def generate_ospfd_conf(i, j, get_rank):
     return f"""
 !
-frr defaults traditional
 hostname ospf{i:x}{j:x}
-log file /var/log/frr/frr-ospf{i:x}{j:x}.log
-service integrated-vtysh-config
-username frr
 password frr
 enable password frr
-!
 
-interface eth0
- ip ospf area 0
-!
-
-interface eth1
- ip ospf area 0
-!
-
-interface eth2
- ip ospf area 0
-!
-
-interface eth3
- ip ospf area 0
-!
 
 router ospf
  ospf router-id 1.1.{i}.{j}
- redistribute connected
- area 0 range 10.{get_rank(i,j)}.{0}.0/24
- area 0 range 10.{get_rank(i,j)}.{1}.0/24
- area 0 range 10.{get_rank(i+1,j)}.{0}.0/24
- area 0 range 10.{get_rank(i,j+1)}.{1}.0/24
-!
-
-line vty
-!
+ network 10.{get_rank(i,j)}.{0}.0/24 area 0
+ network 10.{get_rank(i,j)}.{1}.0/24 area 0
+ network 10.{get_rank(i+1,j)}.{0}.0/24 area 0
+ network 10.{get_rank(i,j+1)}.{1}.0/24 area 0
+debug ospf event
+log stdout
 """
 
 
@@ -134,11 +111,11 @@ class NetworkTopo(Topo):
         for i in range(1, row + 1):
             for j in range(1, col + 1):
                 if j < col:
-                    self.addLink(nodes[(i, j)], nodes[(i, j + 1)], intfName1=f'node_{i:x}{j:x}-eth2',
-                                intfName2=f'node_{i:x}{j + 1:x}-eth1')
+                    self.addLink(nodes[(i, j)], nodes[(i, j + 1)], intfName1=f'node{i:x}{j:x}-eth2',
+                                intfName2=f'node{i:x}{j + 1:x}-eth1')
                 if i < row:
-                    self.addLink(nodes[(i, j)], nodes[(i + 1, j)], intfName1=f'node_{i:x}{j:x}-eth3',
-                                intfName2=f'node_{i + 1:x}{j:x}-eth0')
+                    self.addLink(nodes[(i, j)], nodes[(i + 1, j)], intfName1=f'node{i:x}{j:x}-eth3',
+                                intfName2=f'node{i + 1:x}{j:x}-eth0')
 
 # @click.command()
 # @click.option('--row', default=3, help='Number of rows')
@@ -148,23 +125,21 @@ def matrix_net(row, col):
         return (i - 1) * col + j
     topo = NetworkTopo()
     net = Mininet(controller=None, topo=topo)
-
-    net.start()
     for i in range(1, row + 1):
         for j in range(1, col + 1):
             node = net.getNodeByName(f"node{i:x}{j:x}")
             if j < col:
                 if i > 1:
                     node.cmdPrint(
-                        f"ip addr add 10.{get_rank(i, j)}.{0}.1/24 dev node_{i:x}{j:x}-eth0")
+                        f"ip addr add 10.{get_rank(i, j)}.{0}.1/24 dev node{i:x}{j:x}-eth0")
                 node.cmdPrint(
-                    f"ip addr add 10.{get_rank(i, j + 1)}.{1}.2/24 dev node_{i:x}{j:x}-eth2")
+                    f"ip addr add 10.{get_rank(i, j + 1)}.{1}.2/24 dev node{i:x}{j:x}-eth2")
             if i < row:
                 if j > 1:
                     node.cmdPrint(
-                        f"ip addr add 10.{get_rank(i, j)}.{1}.1/24 dev node_{i:x}{j:x}-eth1")
+                        f"ip addr add 10.{get_rank(i, j)}.{1}.1/24 dev node{i:x}{j:x}-eth1")
                 node.cmdPrint(
-                    f"ip addr add 10.{get_rank(i + 1, j)}.{0}.2/24 dev node_{i:x}{j:x}-eth3")
+                    f"ip addr add 10.{get_rank(i + 1, j)}.{0}.2/24 dev node{i:x}{j:x}-eth3")
     for i in range(1, row + 1):
         for j in range(1, col + 1):
             node = net.getNodeByName(f"node{i:x}{j:x}")
@@ -182,6 +157,8 @@ def matrix_net(row, col):
             node.cmdPrint(
                 f"{lib_dir}ospfd -f {target_dir}ospfd_{i:x}{j:x}.conf -d -z /tmp/{node.name}.api -i /tmp/ospfd-{node.name}.pid >  {prefix_dir}ospfv3_conf/logs/{node.name}-ospfd-stdout 2>&1")
 
+
+    net.start()
     CLI(net)
     net.stop()
     os.system('rm -f /tmp/ospfd-node* /tmp/node*.api  /tmp/zebra-node*')
