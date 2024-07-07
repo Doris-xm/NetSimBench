@@ -1,4 +1,5 @@
-import click
+import argparse
+from mininet.log import setLogLevel
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import Node
@@ -6,7 +7,14 @@ from mininet.cli import CLI
 import time
 import os
 # iperf
-# 简历ospf时间
+
+parser = argparse.ArgumentParser(description='Mininet link bandwidth example')
+
+parser.add_argument('--row', type=int, default=3, help='Number of rows in the topology')
+parser.add_argument('--col', type=int, default=3, help='Number of columns in the topology')
+parser.add_argument('--bw', type=int, default=10, help='Bandwidth of the links in Mbps')
+
+args = parser.parse_args()
 
 hostname = os.uname().nodename
 prefix_dir = f"/home/{hostname}/mininet-test/DataCenterTopo/"
@@ -40,7 +48,7 @@ router ospf
  network 10.{get_rank(i+1,j)}.{0}.0/24 area 0
  network 10.{get_rank(i,j+1)}.{1}.0/24 area 0
 debug ospf event
-log stdout
+log file /tmp/ospf{i:x}{j:x}.log
 """
 
 
@@ -76,8 +84,8 @@ def create_node(topo, i, j):
 class NetworkTopo(Topo):
 
     def build(self, **_opts):
-        row = 3
-        col = 3
+        row = args.row
+        col = args.col
         def get_rank(i, j):
             return (i - 1) * col + j
 
@@ -128,13 +136,13 @@ def matrix_net(row, col):
     for i in range(1, row + 1):
         for j in range(1, col + 1):
             node = net.getNodeByName(f"node{i:x}{j:x}")
-            if j < col:
+            if j <= col:
                 if i > 1:
                     node.cmdPrint(
                         f"ip addr add 10.{get_rank(i, j)}.{0}.1/24 dev node{i:x}{j:x}-eth0")
                 node.cmdPrint(
                     f"ip addr add 10.{get_rank(i, j + 1)}.{1}.2/24 dev node{i:x}{j:x}-eth2")
-            if i < row:
+            if i <= row:
                 if j > 1:
                     node.cmdPrint(
                         f"ip addr add 10.{get_rank(i, j)}.{1}.1/24 dev node{i:x}{j:x}-eth1")
@@ -161,8 +169,9 @@ def matrix_net(row, col):
     net.start()
     CLI(net)
     net.stop()
-    os.system('rm -f /tmp/ospfd-node* /tmp/node*.api  /tmp/zebra-node*')
+    os.system('rm -f no* /tmp/node*.api  /tmp/zebra-node* /tmp/*.log')
     os.system("killall -9 ospfd zebra")
 
 if __name__ == '__main__':
-    matrix_net(row=3, col=3)
+    setLogLevel('info')
+    matrix_net(row=args.row, col=args.col)
