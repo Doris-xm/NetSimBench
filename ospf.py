@@ -93,10 +93,10 @@ class NetworkTopo(Topo):
 
         for i in range(1, row + 1):
             for j in range(1, col + 1):
-                file_name = f"{prefix_dir}/ospfv3_conf/ospfd_{i:x}{j:x}.conf"
+                file_name = f"{prefix_dir}/ospf_conf/ospfd_{i:x}{j:x}.conf"
                 with open(file_name, 'w') as file:
                     file.write(generate_ospfd_conf(i, j, get_rank))
-                file_name = f"{prefix_dir}/ospfv3_conf/zebra_{i:x}{j:x}.conf"
+                file_name = f"{prefix_dir}/ospf_conf/zebra_{i:x}{j:x}.conf"
                 with open(file_name, 'w') as file:
                     file.write(generate_zebra_conf(i, j))
 
@@ -158,19 +158,19 @@ def matrix_net(row, col):
     for i in range(1, row + 1):
         for j in range(1, col + 1):
             node = net.getNodeByName(f"node{i:x}{j:x}")
-            node.cmd(f"mkdir -p {prefix_dir}/ospfv3_conf/")
-            conf_file = f"{prefix_dir}/ospfv3_conf/ospfd_{i:x}{j:x}.conf"
-            zebra_conf = f"{prefix_dir}/ospfv3_conf/zebra_{i:x}{j:x}.conf"
+            node.cmd(f"mkdir -p {prefix_dir}/ospf_conf/")
+            conf_file = f"{prefix_dir}/ospf_conf/ospfd_{i:x}{j:x}.conf"
+            zebra_conf = f"{prefix_dir}/ospf_conf/zebra_{i:x}{j:x}.conf"
             node.cmd(f"cp {conf_file} {target_dir}ospfd_{i:x}{j:x}.conf")
             node.cmd(f"cp {zebra_conf} {target_dir}zebra_{i:x}{j:x}.conf")
             node.cmdPrint(
-                f"{lib_dir}zebra -f {target_dir}zebra_{i:x}{j:x}.conf -d -z /tmp/{node.name}.api -i /tmp/zebra-{node.name}.pid > {prefix_dir}ospfv3_conf/logs/{node.name}-zebra-stdout 2>&1")
+                f"{lib_dir}zebra -f {target_dir}zebra_{i:x}{j:x}.conf -d -z /tmp/{node.name}.api -i /tmp/zebra-{node.name}.pid > {prefix_dir}ospf_conf/logs/{node.name}-zebra-stdout 2>&1")
             time.sleep(1)
     for i in range(1, row + 1):
         for j in range(1, col + 1):
             node = net.getNodeByName(f"node{i:x}{j:x}")
             node.cmdPrint(
-                f"{lib_dir}ospfd -f {target_dir}ospfd_{i:x}{j:x}.conf -d -z /tmp/{node.name}.api -i /tmp/ospfd-{node.name}.pid >  {prefix_dir}ospfv3_conf/logs/{node.name}-ospfd-stdout 2>&1")
+                f"{lib_dir}ospfd -f {target_dir}ospfd_{i:x}{j:x}.conf -d -z /tmp/{node.name}.api -i /tmp/ospfd-{node.name}.pid >  {prefix_dir}ospf_conf/logs/{node.name}-ospfd-stdout 2>&1")
 
 
     net.start()
