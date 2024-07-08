@@ -124,6 +124,13 @@ class NetworkTopo(Topo):
                 if i < row:
                     self.addLink(nodes[(i, j)], nodes[(i + 1, j)], intfName1=f'node{i:x}{j:x}-eth3',
                                 intfName2=f'node{i + 1:x}{j:x}-eth0')
+def iperfTest(net):
+
+    time.sleep(60)
+    node11 = net.getNodeByName('node11')
+    for i in range (2, args.col+1):
+        node = net.getNodeByName(f"node1{i:x}")
+        net.iperf((node11, node), l4Type='TCP', seconds=10)
 
 # @click.command()
 # @click.option('--row', default=3, help='Number of rows')
@@ -167,6 +174,8 @@ def matrix_net(row, col):
 
 
     net.start()
+    # iperfTest(net)
+
     CLI(net)
     net.stop()
     os.system('rm -f no* /tmp/node*.api  /tmp/zebra-node* /tmp/*.log')
